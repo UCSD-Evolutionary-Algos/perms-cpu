@@ -1,6 +1,6 @@
 CC=g++
 RM=rm
-CFLAGS=-Iinclude -std=c++20 -Xclang -fopenmp
+CFLAGS=-Iinclude -std=c++20 -Xclang -fopenmp -lomp -g
 
 all: perms
 

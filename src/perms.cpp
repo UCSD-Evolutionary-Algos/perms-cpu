@@ -126,6 +126,7 @@ struct organism {
 
     void get_score() {
         score = 0;
+#pragma omp parallel for reduction(+:score)
         for (int j = 0; j < cfg.permutation_length; j++) {
             for (int k = j + 1; k < cfg.permutation_length; k++) {
                 ENFORCE_SAME(j, k, 0, 1);
@@ -165,7 +166,6 @@ void stop(int sig) {
     exit(0);
 }
 
-#define POP_ARG(i, v) if (argc >= i + 1) { v = atoi(argv[i]); }
 int main(int argc, char** argv) {
     std::signal(SIGINT, stop);
     std::signal(SIGTERM, stop);
@@ -212,54 +212,68 @@ int main(int argc, char** argv) {
     fflush(stdout);
 
     start = chrono::system_clock::now();
-    for (int i = 0; i < cfg.fitness_evals; i++) {
-        organism *A = population[cfg.rand() % cfg.parent_pool];
-        organism *B = population[cfg.rand() % cfg.parent_pool];
-
-        organism *C = new organism(A, B);
-        population.insert(
-            upper_bound(population.begin(), population.end(), C,
-                [](const organism *a, const organism *b) { return a->score > b->score; }),
-            C
-        );
-        delete population.back();
-        population.pop_back();
-
-        end = chrono::system_clock::now();
-        elapsed = end - start;
-        double rate = static_cast<double>(i) / elapsed.count();
-
-        if (i % 100 > 99) continue;
-        organism *best = population[0];
-        switch (cfg.view) {
-            case FULL: {
-                printf("\x1b[38;2;255;255;255m");
-                for (int j = 0; j < cfg.permutation_length; j++) {
-                    printf("\x1b[%i;%iH\x1b[2K██", (cfg.permutation_length - best->perm[j]) + 1, (2 * j) + 1);
-                }
-                printf(
-                    "\x1b[0m\x1b[%i;1H\x1b[34mPattern: \x1b[33m%i\x1b[0K\n\x1b[34mEvals: \x1b[33m%i\x1b[0K\n\x1b[34mFitness: \x1b[33m%i\x1b[0K\n\x1b[34mRate: \x1b[33m%.2f evals/sec\x1b[0K\n\x1b[34mPermutation: \x1b[33m",
-                    cfg.permutation_length + 3,
-                    cfg.raw,
-                    i + 1,
-                    best->score,
-                    rate
-                );
-                best->print();
-                printf("\x1b[0K\n\x1b[34mOther scores: \x1b[33m");
-                for (int j = 1; j < cfg.parent_pool; j++) {
-                    printf("%i ", population[j]->score);
-                }
-                printf("\x1b[0m\x1b[0K\n");
-                fflush(stdout);
-                break;
+    int i = 0;
+#pragma omp parallel
+    {
+        while (i < cfg.fitness_evals) {
+            vector<organism*> local_population;
+            for (int j = 0; j < cfg.batch_size; j++) {
+                organism *A = population[cfg.rand() % cfg.parent_pool];
+                organism *B = population[cfg.rand() % cfg.parent_pool];
+                organism *C = new organism(A, B);
+                local_population.push_back(C);
             }
-            case SIMPLE: {
-                printf("\x1b[1E\x1b[2ABest fitness after \x1b[33m%i/%i\x1b[0m evals: \x1b[34m%i\x1b[35m (%.2f evals/sec)\x1b[0m\x1b[0K\n", i + 1, cfg.fitness_evals, best->score, rate);
-                fflush(stdout);
-                break;
+
+#pragma omp critical
+            {
+                population.insert(population.end(), local_population.begin(), local_population.end());
+                sort(population.begin(), population.end(), [](const organism *a, const organism *b) {
+                    return a->score > b->score;
+                });
+                for (int j = cfg.population_size; j < population.size(); j++) {
+                    delete population.back();
+                    population.pop_back();
+                }
+
+                i += cfg.batch_size;
             }
-            case NONE: break;
+
+            if (omp_get_thread_num() == 0) {
+                end = chrono::system_clock::now();
+                elapsed = end - start;
+                double rate = static_cast<double>(i) / elapsed.count();
+                organism *best = population[0];
+                switch (cfg.view) {
+                    case FULL: {
+                        printf("\x1b[38;2;255;255;255m");
+                        for (int j = 0; j < cfg.permutation_length; j++) {
+                            printf("\x1b[%i;%iH\x1b[2K██", (cfg.permutation_length - best->perm[j]) + 1, (2 * j) + 1);
+                        }
+                        printf(
+                            "\x1b[0m\x1b[%i;1H\x1b[34mPattern: \x1b[33m%i\x1b[0K\n\x1b[34mEvals: \x1b[33m%i\x1b[0K\n\x1b[34mFitness: \x1b[33m%i\x1b[0K\n\x1b[34mRate: \x1b[33m%.2f evals/sec\x1b[0K\n\x1b[34mPermutation: \x1b[33m",
+                            cfg.permutation_length + 3,
+                            cfg.raw,
+                            i + 1,
+                            best->score,
+                            rate
+                        );
+                        best->print();
+                        printf("\x1b[0K\n\x1b[34mOther scores: \x1b[33m");
+                        for (int j = 1; j < cfg.parent_pool; j++) {
+                            printf("%i ", population[j]->score);
+                        }
+                        printf("\x1b[0m\x1b[0K\n");
+                        fflush(stdout);
+                        break;
+                    }
+                    case SIMPLE: {
+                        printf("\x1b[1E\x1b[2ABest fitness after \x1b[33m%i/%i\x1b[0m evals: \x1b[34m%i\x1b[35m (%.2f evals/sec)\x1b[0m\x1b[0K\n", i + 1, cfg.fitness_evals, best->score, rate);
+                        fflush(stdout);
+                        break;
+                    }
+                    case NONE: break;
+                }
+            }
         }
     }
 
@@ -273,4 +287,3 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-

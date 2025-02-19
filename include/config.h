@@ -29,6 +29,7 @@ struct perms_config {
     int fitness_evals = INT_MAX;
     int parent_pool = 16;
     int max_mutations = 10;
+    int batch_size = 100;
 
     int seed = 0;
     mt19937 gen;
@@ -104,6 +105,8 @@ struct perms_config {
             } else if (cmd == "seed") {
                 s >> seed;
                 gen = mt19937(seed);
+            } else if (cmd == "batch") {
+                s >> batch_size;
             } else if (cmd == "display") {
                 s >> func;
                 if (func == "full") view = FULL;
