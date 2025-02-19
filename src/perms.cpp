@@ -190,14 +190,16 @@ int main(int argc, char** argv) {
 
     chrono::time_point<chrono::system_clock> start, end;
     start = chrono::system_clock::now();
-    vector<organism*> population;
+    vector<organism*> population(cfg.population_size, nullptr);
+#pragma omp parallel for
     for (int i = 0; i < cfg.population_size; i++) {
-        population.push_back(new organism());
+        population[i] = new organism();
     }
 
     sort(population.begin(), population.end(), [](const organism *a, const organism *b) {
         return a->score > b->score;
     });
+#pragma omp parallel for
     for (int i = cfg.parent_pool; i < cfg.population_size; i++) {
         delete population[i];
     }
