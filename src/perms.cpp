@@ -143,8 +143,17 @@ struct organism {
         delete[] perm;
     }
 
-    /*
     void get_score() {
+        if (cfg.pattern_length == 4 &&
+                cfg.pattern[0] == 2 &&
+                cfg.pattern[1] == 4 &&
+                cfg.pattern[2] == 1 &&
+                cfg.pattern[3] == 3
+        ) {
+            get_score_2413();
+            return;
+        }
+
         score = 0;
 #pragma omp parallel for reduction(+:score)
         for (int j = 0; j < cfg.permutation_length; j++) {
@@ -173,9 +182,8 @@ struct organism {
             }
         }
     }
-    */
 
-    void get_score() {
+    void get_score_2413() {
         score = 0;
         int n = cfg.permutation_length;
         vector<vector<ENTRY>> GT, LT;
