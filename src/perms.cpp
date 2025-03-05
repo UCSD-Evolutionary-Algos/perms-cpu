@@ -43,11 +43,6 @@ struct organism {
         }
 
         switch (n) {
-            /*
-            // Cut-and-pattern
-            case 3:
-                // TODO: Implement
-            */
             // Cut-and-crossfill
             case 0: {
                 for (int j = 0; j < cfg.permutation_length; j++) scratch[j] = false;
@@ -107,6 +102,7 @@ struct organism {
 
         // Mutate
         if (cfg.max_mutations > 0) {
+            /*
             int mutationCount = cfg.rand() % cfg.max_mutations;
             for (int j = 0; j < mutationCount; j++) {
                 int a = cfg.rand() % cfg.permutation_length;
@@ -117,6 +113,29 @@ struct organism {
                 perm[a] = perm[b];
                 perm[b] = tmp;
             }
+            */
+
+            int T = cfg.rand() % cfg.max_mutations;
+            vector<pair<ENTRY, ENTRY>> output(cfg.permutation_length);
+            for (int i = 0; i < cfg.permutation_length; i++) {
+                int r1 = cfg.rand() % 10;
+                if (r1 <= 1) {
+                    int r2 = 5 - (cfg.rand() % 10);
+                    output[i] = { (10 * perm[i]) + T * r2, i };
+                } else {
+                    output[i] = { 10 * perm[i], i };
+                }
+            }
+            std::sort(
+                output.begin(),
+                output.end(),
+                [](const pair<ENTRY, ENTRY> &a, const pair<ENTRY, ENTRY> &b) {
+                    return a.first < b.first;
+                }
+            );
+            for (int i = 0; i < cfg.permutation_length; i++) {
+                perm[i] = output[i].second;
+            }
         }
         get_score();
     }
@@ -124,6 +143,7 @@ struct organism {
         delete[] perm;
     }
 
+    /*
     void get_score() {
         score = 0;
 #pragma omp parallel for reduction(+:score)
@@ -150,6 +170,53 @@ struct organism {
                         score++;
                     }
                 }
+            }
+        }
+    }
+    */
+
+    void get_score() {
+        score = 0;
+        int n = cfg.permutation_length;
+        vector<vector<ENTRY>> GT, LT;
+        
+        for (int i = 0; i < n; i++) {
+            GT.push_back(vector<ENTRY>());
+            LT.push_back(vector<ENTRY>());
+        }
+
+        for (int i = 0; i < n - 1; i++) {
+            for (int j = i + 1; j < n; j++) {
+                if (perm[i] < perm[j]) {
+                    GT[perm[i]].push_back(perm[j]);
+                } else {
+                    LT[perm[i]].push_back(perm[j]);
+                }
+            }
+        }
+
+        for (int i = 0; i < n - 1; i++) {
+            for (const ENTRY &g : GT[perm[i]]) {
+                int curr = 0,
+                    total = 0;
+                if (LT[perm[i]].size() <= 0) continue;
+
+                int cnt = LT[perm[i]].size() - 1;
+                for (int v = 0; v < LT[g].size(); v++) {
+                    int w = LT[g][LT[g].size() - v - 1];
+                    if (std::find(
+                            GT[LT[perm[i]][cnt]].begin(),
+                            GT[LT[perm[i]][cnt]].end(),
+                            w
+                        ) != GT[LT[perm[i]][cnt]].end()
+                    ) {
+                        curr++;
+                    } else if (w == LT[perm[i]][cnt]) {
+                        total += curr;
+                        cnt--;
+                    }
+                }
+                score += total;
             }
         }
     }

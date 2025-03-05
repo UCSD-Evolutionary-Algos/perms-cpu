@@ -1,6 +1,6 @@
 crossover crossfill flip shift
 pattern 2413
-length 100
+length 64
 population 100
 evals 1000000
 parents 100
